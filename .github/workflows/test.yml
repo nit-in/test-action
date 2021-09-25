@@ -76,4 +76,4 @@ jobs:
           
           export TZ=Asia/Kolkata
           export LC_ALL=C
-          make -j1 sepolicy
+          make -j1 bootimage
