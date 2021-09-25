@@ -1,0 +1,79 @@
+name: test
+
+on:
+  push:
+  workflow_dispatch:
+
+jobs:
+  test_build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v2
+      - uses: rokibhasansagar/slimhub_actions@main
+      - name: Setting up
+        env:
+          ACTIONS_ALLOW_UNSECURE_COMMANDS: 'true'
+        run:  |
+          sudo apt update
+          sudo apt install --fix-missing -y python2.7 bc bison build-essential ccache curl flex g++-multilib gcc-multilib git gnupg gperf imagemagick lib32ncurses5-dev lib32readline-dev lib32z1-dev liblz4-tool libncurses5 libncurses5-dev libsdl1.2-dev libssl-dev libxml2 libxml2-utils lzop pngcrush rsync schedtool squashfs-tools xsltproc zip zlib1g-dev
+          mkdir -p ~/bin
+          mkdir -p ~/android/lineage
+          curl https://storage.googleapis.com/git-repo-downloads/repo > ~/bin/repo
+          chmod a+x ~/bin/repo
+
+          cat >> ~/.profile <<EOF
+          if [ -d "$HOME/bin" ] ; then
+            PATH="$HOME/bin:$PATH"
+          fi
+          EOF
+
+          source ~/.profile
+          git config --global user.email "nit_in@live.com"
+          git config --global user.name "nit-in"
+
+      - name: sync repos
+        env:
+          ACTIONS_ALLOW_UNSECURE_COMMANDS: 'true'
+        run:  |
+          cd ~/android/lineage
+          source ~/.profile
+          repo init --depth=1 --no-repo-verify -u git://github.com/LineageOS/android.git -b lineage-18.1 -g default,-device,-mips,-darwin,-notdefault
+          git clone https://github.com/Micromax-E6746/local_manifests.git --depth 1 -b test3 .repo/local_manifests
+          repo sync -c --no-clone-bundle --no-tags --optimized-fetch --prune --force-sync -j8
+          rm -rf .repo/project-objects
+
+      - name: add swap
+        env:
+          ACTIONS_ALLOW_UNSECURE_COMMANDS: 'true'
+        run:  |
+          sudo fallocate -l 16G /swapfile || sudo dd if=/dev/zero of=/swapfile bs=1024 count=16777216
+          sudo chmod 600 /swapfile
+          sudo mkswap /swapfile
+          sudo swapon /swapfile
+          sudo swapon --show
+
+      - name: run build
+        env:
+          ACTIONS_ALLOW_UNSECURE_COMMANDS: 'true'
+        run:  |
+          cd ~/android/lineage
+          source build/envsetup.sh
+
+          my_target='lineage_e6746-userdebug'
+          lunch $my_target
+
+          
+          bproduct=$(get_build_var TARGET_PRODUCT)
+          bvariant=$(get_build_var TARGET_BUILD_VARIANT)
+          btarget=$(echo "${bproduct}-${bvariant}")
+
+          echo $my_target
+          echo $bproduct
+          echo $bvariant
+          echo $btarget
+
+          if [[ ${btarget} == ${my_target} ]]; then echo "Config looks fine and build can continue...";else echo "Mismatch";exit 1;fi
+          
+          export TZ=Asia/Kolkata
+          export LC_ALL=C
+          make -j1 sepolicy
